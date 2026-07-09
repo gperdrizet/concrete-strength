@@ -4,7 +4,7 @@
 	// Based on nvidia/cuda:12.8.1-runtime-ubuntu24.04 with data science packages
 	// See here: https://hub.docker.com/r/gperdrizet/datascience-nvidia
 	"name": "DataScience NVIDIA",
-	"image": "gperdrizet/datascience-nvidia",
+	"image": "gperdrizet/datascience-nvidia:6.0.1",
     "runArgs": [
 		"--gpus", "all",              // Enable all available GPUs in the container
 		"--pid=host",                 // Use host PIDs, needed for nvidia-smi process list
@@ -41,7 +41,7 @@
 	},
 
 	// Create data and notebooks directories on first container creation
-	"onCreateCommand": "mkdir -p data && mkdir -p notebooks",
+	"onCreateCommand": "mkdir -p data && mkdir -p notebooks && mkdir -p models",
 
 	// Use 'postCreateCommand' to run commands once after the container is created
 	"postCreateCommand": "",
