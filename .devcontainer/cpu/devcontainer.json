@@ -39,7 +39,7 @@
 	"onCreateCommand": "mkdir -p data && mkdir -p notebooks && mkdir -p models",
 
 	// Use 'postCreateCommand' to run commands once after the container is created
-	"postCreateCommand": "",
+	"postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
 
 	// Use 'postAttachCommand' to run commands each time a user connects to the container
 	"postAttachCommand": ""
