@@ -1,3 +1,5 @@
+'''Streamlit web app for concrete strength prediction'''
+
 from pathlib import Path
 import warnings
 
@@ -7,14 +9,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-st.set_page_config(page_title="Concrete Strength Predictor", layout="wide")
-
+# Paths
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-MODEL_CANDIDATES = [
-    PROJECT_ROOT / "models" / "gpr_models.pkl",
-    PROJECT_ROOT / "models" / "gpr_model.pkl",
-]
+MODEL = PROJECT_ROOT / "models" / "gpr_model.pkl"
 DATA_PATH = PROJECT_ROOT / "data" / "concrete_data.csv"
+
+# Dataset metadata
 FEATURES = [
     "cement",
     "slag",
@@ -25,7 +25,9 @@ FEATURES = [
     "fine_agg",
     "age",
 ]
+
 MIX_FEATURES = FEATURES[:-1]
+
 FEATURE_LABELS = {
     "cement": "Cement (kg/m^3)",
     "slag": "Blast Furnace Slag (kg/m^3)",
@@ -38,6 +40,8 @@ FEATURE_LABELS = {
 
 
 def apply_theme():
+    '''Site theme for web app (CSS customization)'''
+
     st.markdown(
         """
         <style>
@@ -98,21 +102,26 @@ def apply_theme():
 
 @st.cache_resource
 def load_model():
-    for path in MODEL_CANDIDATES:
-        if path.exists():
-            return joblib.load(path), path.name
-    candidate_list = "\n".join(str(path) for path in MODEL_CANDIDATES)
+    '''Load the pre-trained model from disk. Returns the model and its filename.'''
+
+    if MODEL.exists():
+        return joblib.load(MODEL), MODEL.name\
+        
     raise FileNotFoundError(
-        f"No model file found. Looked for:\n{candidate_list}"
+        f"No model file found. Looked for:\n{MODEL}"
     )
 
 
 @st.cache_data
 def load_data():
+    '''Load the dataset from disk. Returns a pandas DataFrame.'''
+
     return pd.read_csv(DATA_PATH)
 
 
 def make_slider(col, feature_name, min_value, max_value, default):
+    '''Create a slider for a given feature within specified bounds.'''
+
     return col.slider(
         FEATURE_LABELS[feature_name],
         min_value=float(min_value),
@@ -123,32 +132,46 @@ def make_slider(col, feature_name, min_value, max_value, default):
 
 
 def build_time_curve_inputs(component_values, ages):
+    '''Build a DataFrame for predicting strength over time given component values and ages.'''
+    
     rows = []
+
     for age in ages:
         row = {**component_values, "age": float(age)}
         rows.append(row)
+
     return pd.DataFrame(rows, columns=FEATURES)
 
 
 def main():
+    '''Main function to run the Streamlit web app.'''
+
+    # Set page title and layout
+    st.set_page_config(page_title="Concrete Strength Predictor", layout="wide")
+
+    # Apply css customizations
     apply_theme()
 
+    # Page title and description
     st.title("Concrete Compressive Strength Over Time")
     st.write(
         "Use the sliders to set a concrete mix. The chart shows predicted strength "
         "across curing age with a 95% confidence interval."
     )
 
+    # Load the GPR model and the dataset
     model, model_name = load_model()
     df = load_data()
 
     st.caption(f"Loaded model: {model_name}")
 
+    # Set bounds for the sliders based on the dataset
     bounds = df[MIX_FEATURES].agg(["min", "max", "median"])
 
     left, right = st.columns(2)
     component_values = {}
 
+    # Create sliders for each mix feature
     for idx, feature in enumerate(MIX_FEATURES):
         target_col = left if idx % 2 == 0 else right
         component_values[feature] = make_slider(
@@ -159,20 +182,24 @@ def main():
             bounds.loc["median", feature],
         )
 
+    # Section for predicted strength curve
     st.subheader("Predicted Strength Curve")
     age_min = int(df["age"].min())
     age_max = int(df["age"].max())
     ages = np.arange(age_min, age_max + 1)
     X_curve = build_time_curve_inputs(component_values, ages)
 
+    # Predict mean and standard deviation for the strength curve
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="X has feature names")
         mean_strength, std_strength = model.predict(X_curve, return_std=True)
 
+    # Compute the 95% confidence interval for the predictions
     ci_half_width = 1.96 * std_strength
     lower = mean_strength - ci_half_width
     upper = mean_strength + ci_half_width
 
+    # Slider to check prediction at a specific age
     current_age = st.slider(
         "Check prediction at a specific age (days)",
         min_value=age_min,
@@ -181,16 +208,21 @@ def main():
         step=1,
     )
 
+    # Prepare input for the selected age prediction
     current_input = pd.DataFrame(
         [{**component_values, "age": float(current_age)}],
         columns=FEATURES,
     )
 
+    # Predict mean and standard deviation for the selected age
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="X has feature names")
         current_mean, current_std = model.predict(current_input, return_std=True)
 
+    # Create the plotly figure for the predicted strength curve
     fig = go.Figure()
+
+    # Add the confidence interval upper bound trace
     fig.add_trace(
         go.Scatter(
             x=ages,
@@ -201,6 +233,8 @@ def main():
             hoverinfo="skip",
         )
     )
+
+    # Add the confidence interval lower bound trace
     fig.add_trace(
         go.Scatter(
             x=ages,
@@ -217,6 +251,8 @@ def main():
             ),
         )
     )
+
+    # Add the predicted mean strength trace
     fig.add_trace(
         go.Scatter(
             x=ages,
@@ -231,6 +267,8 @@ def main():
             ),
         )
     )
+
+    # Add the selected age prediction as a marker
     fig.add_trace(
         go.Scatter(
             x=[current_age],
@@ -245,6 +283,8 @@ def main():
             ),
         )
     )
+
+    # Update the layout and axes of the figure
     fig.update_layout(
         title="Predicted Concrete Strength vs. Age",
         xaxis_title="Age (days)",
@@ -255,12 +295,18 @@ def main():
         legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(46, 196, 182, 0.30)", borderwidth=1),
         hovermode="x unified",
     )
+
+    # Update the grid color and remove the zero lines for better visualization
     fig.update_xaxes(gridcolor="rgba(155, 93, 229, 0.18)", zeroline=False)
     fig.update_yaxes(gridcolor="rgba(46, 196, 182, 0.18)", zeroline=False)
 
-    st.plotly_chart(fig, use_container_width=True)
+    # Render the plotly chart in the Streamlit app
+    st.plotly_chart(fig, width='stretch')
 
+    # Calculate the 95% confidence interval for the selected age
     current_ci = 1.96 * current_std[0]
+
+    # Display the predicted strength and its 95% confidence interval as a metric in the Streamlit app
     st.metric(
         label=f"Predicted Strength at Day {current_age}",
         value=f"{current_mean[0]:.2f} MPa",
