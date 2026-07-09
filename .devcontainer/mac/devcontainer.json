@@ -45,5 +45,5 @@
 	"postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
 
 	// Use 'postAttachCommand' to run commands each time a user connects to the container
-	"postAttachCommand": ""
+	"postAttachCommand": "streamlit run app/app.py"
 }
